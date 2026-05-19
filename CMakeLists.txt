@@ -119,10 +119,15 @@ set(AURORA_ENABLE_RMLUI ON CACHE BOOL "Enable RmlUi UI support" FORCE)
 add_subdirectory(extern/aurora EXCLUDE_FROM_ALL)
 target_compile_definitions(aurora_mtx PRIVATE MTX_USE_PS=1)
 
+# Streamline SDK integration
+add_subdirectory(extern/streamline EXCLUDE_FROM_ALL)
+set(STREAMLINE_FEATURE_DLSS_SR ON CACHE BOOL "Enable DLSS Super Resolution" FORCE)
+message(STATUS "dusklight: Streamline integrated (DLSS enabled)")
+
 add_subdirectory(libs/freeverb)
 
 option(DUSK_BUILD_WARNINGS "Enable compiler warnings (off by default)")
-option(DUSK_SELECTED_OPT "If on, selected parts of the project will be compiled with optimizations on Debug, intending to make the game run at 30 FPS. Note for MSVC: you will need to remove '/RTC1' from your debug flags in CMake.")
+option(DUSK_SELECTED_OPT "If on, selected parts of the project will be compiled with optimizations on Debug, intending to make the game run at 30 FPS. Note for MSVC: you will need to remove '/RTC[...]
 option(DUSK_MOVIE_SUPPORT "If on, compile against libjpeg-turbo to enable THP file decoding" ON)
 option(DUSK_ENABLE_UPDATE_CHECKER "Enable update checking support" ON)
 option(DUSK_ENABLE_SENTRY_NATIVE "Enable sentry-native crash reporting support" OFF)
@@ -135,6 +140,7 @@ if (MSVC)
         set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "EditAndContinue")
     endif ()
     if (CMAKE_MSVC_DEBUG_INFORMATION_FORMAT STREQUAL "EditAndContinue")
+        set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "EditAndContinue")
         add_link_options("/INCREMENTAL")
     endif ()
 endif ()
@@ -306,7 +312,7 @@ set(DUSK_COPYRIGHT "Copyright (C) Twilit Realm contributors")
 source_group("dolzel" FILES ${DOLZEL_FILES} ${Z2AUDIOLIB_FILES} ${REL_FILES})
 source_group("dusklight" FILES ${DUSK_FILES} ${DUSK_HTTP_BACKEND_FILES})
 
-set(GAME_COMPILE_DEFS TARGET_PC WIDESCREEN_SUPPORT=1 AVOID_UB=1 VERSION=0 MTX_USE_PS=1)
+set(GAME_COMPILE_DEFS TARGET_PC WIDESCREEN_SUPPORT=1 AVOID_UB=1 VERSION=0 MTX_USE_PS=1 DUSK_ENABLE_STREAMLINE=1)
 
 set(GAME_INCLUDE_DIRS
     include
@@ -321,7 +327,7 @@ set(GAME_INCLUDE_DIRS
 find_package(Threads REQUIRED)
 set(GAME_LIBS aurora::core aurora::gx aurora::gd aurora::si aurora::vi aurora::pad aurora::mtx aurora::os aurora::dvd
     aurora::card freeverb cxxopts::cxxopts absl::flat_hash_map nlohmann_json::nlohmann_json TracyClient fmt::fmt
-    Threads::Threads)
+    Threads::Threads streamline)
 
 list(APPEND GAME_LIBS libzstd_static)
 
@@ -452,6 +458,12 @@ target_compile_definitions(dusklight PRIVATE ${GAME_COMPILE_DEFS})
 target_include_directories(dusklight PRIVATE ${GAME_INCLUDE_DIRS})
 target_link_libraries(dusklight PRIVATE aurora::main ${GAME_LIBS} ${JSYSTEM_LINK_LIBRARIES})
 target_precompile_headers(dusklight PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/include/dusk_pch.hpp>")
+
+# Add Streamline DLL dependency
+if (TARGET CopyStreamlineDLLs)
+    add_dependencies(dusklight CopyStreamlineDLLs)
+endif ()
+
 if (TARGET crashpad_handler)
     add_dependencies(dusklight crashpad_handler)
     add_custom_command(TARGET dusklight POST_BUILD
@@ -626,8 +638,8 @@ if (CMAKE_BUILD_TYPE STREQUAL Debug OR CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
             endif ()
         elseif (UNIX)
             get_target_prefix(${target} target_prefix)
-            install(CODE "execute_process(WORKING_DIRECTORY \"${CMAKE_INSTALL_PREFIX}\" COMMAND objcopy --only-keep-debug \"${target_prefix}$<TARGET_FILE_NAME:${target}>\" \"${target_prefix}$<TARGET_FILE_NAME:${target}>.dbg\")")
-            install(CODE "execute_process(WORKING_DIRECTORY \"${CMAKE_INSTALL_PREFIX}\" COMMAND objcopy --strip-debug --add-gnu-debuglink=$<TARGET_FILE_NAME:${target}>.dbg \"${target_prefix}$<TARGET_FILE_NAME:${target}>\")")
+            install(CODE "execute_process(WORKING_DIRECTORY \"${CMAKE_INSTALL_PREFIX}\" COMMAND objcopy --only-keep-debug \"${target_prefix}$<TARGET_FILE_NAME:${target}>\" \"${target_prefix}$<TAR[...]
+            install(CODE "execute_process(WORKING_DIRECTORY \"${CMAKE_INSTALL_PREFIX}\" COMMAND objcopy --strip-debug --add-gnu-debuglink=$<TARGET_FILE_NAME:${target}>.dbg \"${target_prefix}$<TAR[...]
         endif ()
         list(APPEND DEBUG_FILES_LIST "${output_name}")
     endforeach ()
@@ -655,7 +667,7 @@ foreach (target IN LISTS BINARY_TARGETS)
         get_target_prefix(${extra_target} extra_prefix)
         if (NOT "${target_prefix}" STREQUAL "${extra_prefix}")
             # Copy extra target to target prefix
-            install(CODE "execute_process(WORKING_DIRECTORY \"${CMAKE_INSTALL_PREFIX}\" COMMAND cp \"${extra_prefix}$<TARGET_FILE_NAME:${extra_target}>\" \"${target_prefix}$<TARGET_FILE_NAME:${extra_target}>\")")
+            install(CODE "execute_process(WORKING_DIRECTORY \"${CMAKE_INSTALL_PREFIX}\" COMMAND cp \"${extra_prefix}$<TARGET_FILE_NAME:${extra_target}>\" \"${target_prefix}$<TARGET_FILE_NAME:${ex[...]
         endif ()
     endforeach ()
 endforeach ()
